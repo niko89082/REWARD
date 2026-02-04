@@ -1,0 +1,137 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  phoneE164 String   @unique
+  createdAt DateTime @default(now())
+
+  ledgerEvents LedgerEvent[]
+  redemptions  Redemption[]
+}
+
+model Business {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  latitude  Float
+  longitude Float
+  createdAt DateTime @default(now())
+
+  // Square OAuth fields
+  squareEnvironment     String?
+  squareMerchantId       String? @unique
+  squareLocationId      String?
+  squareAccessToken     String?
+  squareRefreshToken    String?
+  squareTokenExpiresAt  DateTime?
+  squareConnectedAt     DateTime?
+
+  rewardPrograms RewardProgram[]
+  rewards        Reward[]
+  ledgerEvents   LedgerEvent[]
+  redemptions    Redemption[]
+}
+
+model RewardProgram {
+  id            String   @id @default(cuid())
+  businessId   String
+  earnType      RewardProgramEarnType
+  earnParamsJson Json
+  enabled       Boolean
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, earnType])
+  @@index([businessId])
+}
+
+model Reward {
+  id          String   @id @default(cuid())
+  businessId String
+  type        RewardType
+  configJson  Json
+  costPoints  Int
+  enabled     Boolean
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  redemptions Redemption[]
+
+  @@unique([businessId, type])
+  @@index([businessId])
+}
+
+model LedgerEvent {
+  id           String   @id @default(cuid())
+  userId       String
+  businessId   String
+  type         LedgerEventType
+  pointsDelta  Int
+  externalRef  String?
+  metadataJson Json
+  createdAt    DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([userId, businessId])
+}
+
+model Redemption {
+  id                String            @id @default(cuid())
+  userId            String
+  businessId        String
+  rewardId          String
+  status            RedemptionStatus
+  token             String            @unique
+  expiresAt         DateTime
+  lockedAt          DateTime?
+  confirmedAt       DateTime?
+  canceledAt        DateTime?
+  providerPaymentId String?
+  providerOrderId   String?
+  createdAt         DateTime          @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  reward   Reward   @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+
+  @@index([userId, businessId])
+  @@index([token])
+}
+
+enum RewardProgramEarnType {
+  POINTS_PER_DOLLAR
+  ITEM_POINTS
+}
+
+enum RewardType {
+  FREE_ITEM
+  PERCENT_OFF
+  AMOUNT_OFF
+}
+
+enum LedgerEventType {
+  EARN
+  REDEEM
+  REVERSAL
+}
+
+enum RedemptionStatus {
+  PENDING
+  IN_PROGRESS
+  CONFIRMED
+  CANCELED
+}

@@ -1,0 +1,14 @@
+./node_modules
+./package-lock.json
+./prisma/migrations
+./prisma/schema.prisma
+./prisma/schema.prisma.bak
+./prisma/schema.prisma.bak.2
+./prisma/schema.prisma.bak.3
+./prisma/schema.prisma.bak.4
+./prisma/schema.prisma.bak.5
+./prisma/schema.prisma.bak.6
+./prisma/schema.prisma.bak.7
+./prisma/schema.prisma.bak.8
+./prisma/schema.prisma.bak.9
+./prisma/schema.prisma.bak.10
