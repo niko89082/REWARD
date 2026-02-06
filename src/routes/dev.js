@@ -28,28 +28,25 @@ async function devRoutes(fastify) {
     };
     validateEarnParamsJson('POINTS_PER_DOLLAR', pointsPerDollarParams);
 
-    let rewardProgram = await prisma.rewardProgram.findFirst({
+    // Use upsert for deterministic ID
+    const rewardProgram = await prisma.rewardProgram.upsert({
       where: {
-        businessId: business.id,
-        earnType: 'POINTS_PER_DOLLAR',
-      },
-    });
-
-    if (!rewardProgram) {
-      rewardProgram = await prisma.rewardProgram.create({
-        data: {
+        businessId_earnType: {
           businessId: business.id,
           earnType: 'POINTS_PER_DOLLAR',
-          earnParamsJson: pointsPerDollarParams,
-          enabled: true,
         },
-      });
-    } else {
-      rewardProgram = await prisma.rewardProgram.update({
-        where: { id: rewardProgram.id },
-        data: { enabled: true },
-      });
-    }
+      },
+      update: {
+        enabled: true,
+        earnParamsJson: pointsPerDollarParams,
+      },
+      create: {
+        businessId: business.id,
+        earnType: 'POINTS_PER_DOLLAR',
+        earnParamsJson: pointsPerDollarParams,
+        enabled: true,
+      },
+    });
 
     // Seed RewardProgram - ITEM_POINTS (disabled)
     const itemPointsParams = {
@@ -60,23 +57,24 @@ async function devRoutes(fastify) {
     };
     validateEarnParamsJson('ITEM_POINTS', itemPointsParams);
 
-    let itemPointsProgram = await prisma.rewardProgram.findFirst({
+    // Use upsert for deterministic ID
+    await prisma.rewardProgram.upsert({
       where: {
-        businessId: business.id,
-        earnType: 'ITEM_POINTS',
-      },
-    });
-
-    if (!itemPointsProgram) {
-      await prisma.rewardProgram.create({
-        data: {
+        businessId_earnType: {
           businessId: business.id,
           earnType: 'ITEM_POINTS',
-          earnParamsJson: itemPointsParams,
-          enabled: false,
         },
-      });
-    }
+      },
+      update: {
+        earnParamsJson: itemPointsParams,
+      },
+      create: {
+        businessId: business.id,
+        earnType: 'ITEM_POINTS',
+        earnParamsJson: itemPointsParams,
+        enabled: false,
+      },
+    });
 
     // Seed FREE_ITEM reward
     const freeItemConfig = {
@@ -87,29 +85,27 @@ async function devRoutes(fastify) {
     };
     validateConfigJson('FREE_ITEM', freeItemConfig);
 
-    let freeItemReward = await prisma.reward.findFirst({
+    // Use upsert for deterministic ID
+    const freeItemReward = await prisma.reward.upsert({
       where: {
-        businessId: business.id,
-        type: 'FREE_ITEM',
-      },
-    });
-
-    if (!freeItemReward) {
-      freeItemReward = await prisma.reward.create({
-        data: {
+        businessId_type: {
           businessId: business.id,
           type: 'FREE_ITEM',
-          configJson: freeItemConfig,
-          costPoints: 100,
-          enabled: true,
         },
-      });
-    } else {
-      freeItemReward = await prisma.reward.update({
-        where: { id: freeItemReward.id },
-        data: { enabled: true },
-      });
-    }
+      },
+      update: {
+        enabled: true,
+        configJson: freeItemConfig,
+        costPoints: 100,
+      },
+      create: {
+        businessId: business.id,
+        type: 'FREE_ITEM',
+        configJson: freeItemConfig,
+        costPoints: 100,
+        enabled: true,
+      },
+    });
 
     // Seed PERCENT_OFF reward
     const percentOffConfig = {
@@ -121,42 +117,36 @@ async function devRoutes(fastify) {
     };
     validateConfigJson('PERCENT_OFF', percentOffConfig);
 
-    let percentOffReward = await prisma.reward.findFirst({
+    // Use upsert for deterministic ID
+    const percentOffReward = await prisma.reward.upsert({
       where: {
+        businessId_type: {
+          businessId: business.id,
+          type: 'PERCENT_OFF',
+        },
+      },
+      update: {
+        enabled: true,
+        configJson: percentOffConfig,
+        costPoints: 200,
+      },
+      create: {
         businessId: business.id,
         type: 'PERCENT_OFF',
+        configJson: percentOffConfig,
+        costPoints: 200,
+        enabled: true,
       },
     });
 
-    if (!percentOffReward) {
-      percentOffReward = await prisma.reward.create({
-        data: {
-          businessId: business.id,
-          type: 'PERCENT_OFF',
-          configJson: percentOffConfig,
-          costPoints: 200,
-          enabled: true,
-        },
-      });
-    } else {
-      percentOffReward = await prisma.reward.update({
-        where: { id: percentOffReward.id },
-        data: { enabled: true },
-      });
-    }
-
-    // Seed user
-    let user = await prisma.user.findUnique({
+    // Seed user - use upsert for deterministic ID
+    const user = await prisma.user.upsert({
       where: { phoneE164: '+15555550100' },
+      update: {},
+      create: {
+        phoneE164: '+15555550100',
+      },
     });
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          phoneE164: '+15555550100',
-        },
-      });
-    }
 
     // Seed LedgerEvent (+500 points) - use fixed externalRef for idempotency
     const seedExternalRef = `seed-${user.id}-${business.id}`;

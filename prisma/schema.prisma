@@ -10,128 +10,337 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  phoneE164 String   @unique
-  createdAt DateTime @default(now())
+// ============================================================================
+// ENUMS
+// ============================================================================
 
-  ledgerEvents LedgerEvent[]
-  redemptions  Redemption[]
+enum POSProvider {
+  SQUARE
 }
 
-model Business {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  latitude  Float
-  longitude Float
-  createdAt DateTime @default(now())
-
-  // Square OAuth fields
-  squareEnvironment     String?
-  squareMerchantId       String? @unique
-  squareLocationId      String?
-  squareAccessToken     String?
-  squareRefreshToken    String?
-  squareTokenExpiresAt  DateTime?
-  squareConnectedAt     DateTime?
-
-  rewardPrograms RewardProgram[]
-  rewards        Reward[]
-  ledgerEvents   LedgerEvent[]
-  redemptions    Redemption[]
-}
-
-model RewardProgram {
-  id            String   @id @default(cuid())
-  businessId   String
-  earnType      RewardProgramEarnType
-  earnParamsJson Json
-  enabled       Boolean
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-
-  @@unique([businessId, earnType])
-  @@index([businessId])
-}
-
-model Reward {
-  id          String   @id @default(cuid())
-  businessId String
-  type        RewardType
-  configJson  Json
-  costPoints  Int
-  enabled     Boolean
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  redemptions Redemption[]
-
-  @@unique([businessId, type])
-  @@index([businessId])
-}
-
-model LedgerEvent {
-  id           String   @id @default(cuid())
-  userId       String
-  businessId   String
-  type         LedgerEventType
-  pointsDelta  Int
-  externalRef  String?
-  metadataJson Json
-  createdAt    DateTime @default(now())
-
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-
-  @@index([userId, businessId])
-}
-
-model Redemption {
-  id                String            @id @default(cuid())
-  userId            String
-  businessId        String
-  rewardId          String
-  status            RedemptionStatus
-  token             String            @unique
-  expiresAt         DateTime
-  lockedAt          DateTime?
-  confirmedAt       DateTime?
-  canceledAt        DateTime?
-  providerPaymentId String?
-  providerOrderId   String?
-  createdAt         DateTime          @default(now())
-
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  reward   Reward   @relation(fields: [rewardId], references: [id], onDelete: Cascade)
-
-  @@index([userId, businessId])
-  @@index([token])
-}
-
-enum RewardProgramEarnType {
-  POINTS_PER_DOLLAR
-  ITEM_POINTS
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
 }
 
 enum RewardType {
-  FREE_ITEM
-  PERCENT_OFF
-  AMOUNT_OFF
-}
-
-enum LedgerEventType {
-  EARN
-  REDEEM
-  REVERSAL
+  POINTS_BASED
+  ITEM_BASED
 }
 
 enum RedemptionStatus {
   PENDING
-  IN_PROGRESS
-  CONFIRMED
-  CANCELED
+  REDEEMED
+  CANCELLED
+  EXPIRED
+}
+
+enum LedgerEntryType {
+  EARN
+  REDEEM
+  REFUND
+}
+
+enum WebhookStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+// ============================================================================
+// MERCHANT MODELS
+// ============================================================================
+
+model Merchant {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // bcrypt hashed
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  posIntegrations POSIntegration[]
+  locations       Location[]
+  rewards         Reward[]
+  transactions    Transaction[]
+  redemptions     Redemption[]
+  customerBalances CustomerBalance[]
+  itemCounts      CustomerItemCount[]  // ← ADD THIS LINE
+  ledgerEntries   LedgerEntry[]        // ← ADD THIS LINE
+
+  @@index([email])
+}
+
+model POSIntegration {
+  id                 String     @id @default(uuid())
+  merchantId         String
+  provider           POSProvider
+  accessToken        String     // Encrypted
+  refreshToken       String?    // Encrypted, nullable
+  providerMerchantId String
+  expiresAt          DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  // Relations
+  merchant  Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  locations Location[]
+
+  @@unique([merchantId, provider])
+  @@index([merchantId])
+  @@index([provider])
+}
+
+model Location {
+  id              String   @id @default(uuid())
+  merchantId      String
+  posIntegrationId String
+  posLocationId   String   // Location ID from POS system
+  name            String
+  address         String?
+  city            String?
+  state           String?
+  zipCode         String?
+  country         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  merchant       Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  posIntegration POSIntegration @relation(fields: [posIntegrationId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+
+  @@unique([posIntegrationId, posLocationId])
+  @@index([merchantId])
+  @@index([posIntegrationId])
+}
+
+// ============================================================================
+// CUSTOMER MODELS
+// ============================================================================
+
+model Customer {
+  id        String   @id @default(uuid())
+  phoneNumber String? @unique // E.164 format
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  linkedCards      LinkedCard[]
+  transactions     Transaction[]
+  customerBalances CustomerBalance[]
+  redemptions      Redemption[]
+  ledgerEntries    LedgerEntry[]
+  itemCounts       CustomerItemCount[]
+
+  @@index([phoneNumber])
+}
+
+model LinkedCard {
+  id              String   @id @default(uuid())
+  customerId      String
+  cardFingerprint String   // Hash of card for matching
+  last4           String
+  brand           String?  // e.g., "VISA", "MASTERCARD"
+  zipCode         String?  // For verification
+  posProvider     POSProvider
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([cardFingerprint, posProvider])
+  @@index([customerId])
+  @@index([cardFingerprint])
+}
+
+// ============================================================================
+// TRANSACTION MODELS
+// ============================================================================
+
+model Transaction {
+  id                String            @id @default(uuid())
+  merchantId        String
+  customerId        String?
+  locationId        String?
+  posProvider       POSProvider
+  posTransactionId  String            // Transaction ID from POS system
+  posLocationId     String?           // Location ID from POS system
+  amount            Decimal           @db.Decimal(10, 2)
+  pointsEarned      Int               @default(0)
+  status            TransactionStatus @default(PENDING)
+  metadata          Json?             // Store additional POS data
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  merchant       Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  customer       Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  location       Location?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  ledgerEntries  LedgerEntry[]
+
+  @@unique([posProvider, posTransactionId]) // Idempotency constraint
+  @@index([merchantId])
+  @@index([customerId])
+  @@index([posProvider, posTransactionId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CustomerBalance {
+  id         String   @id @default(uuid())
+  customerId String
+  merchantId String
+  points     Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, merchantId])
+  @@index([customerId])
+  @@index([merchantId])
+}
+
+// ============================================================================
+// REWARD MODELS
+// ============================================================================
+
+model Reward {
+  id          String     @id @default(uuid())
+  merchantId  String
+  name        String
+  description String?
+  type        RewardType
+  pointsCost  Int?       // For POINTS_BASED rewards
+  itemName    String?    // For ITEM_BASED rewards
+  itemCount   Int?       // For ITEM_BASED rewards (e.g., "buy 10, get 1 free")
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  merchant        Merchant        @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  posRewardItems  POSRewardItem[]
+  redemptions     Redemption[]
+  itemCounts      CustomerItemCount[]
+
+  @@index([merchantId])
+  @@index([type])
+  @@index([isActive])
+}
+
+model POSRewardItem {
+  id           String   @id @default(uuid())
+  rewardId     String
+  posProvider  POSProvider
+  posItemId    String   // Catalog item ID in POS system
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  reward Reward @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+
+  @@unique([rewardId, posProvider])
+  @@index([rewardId])
+  @@index([posProvider, posItemId])
+}
+
+model Redemption {
+  id            String           @id @default(uuid())
+  customerId    String
+  merchantId    String
+  rewardId      String
+  qrToken       String           @unique // Format: "qr_{nanoid(32)}"
+  pinCode       String           @unique // 6-digit number
+  status        RedemptionStatus @default(PENDING)
+  pointsDeducted Int?
+  redeemedAt    DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  // Relations
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  reward   Reward   @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  ledgerEntry LedgerEntry?
+
+  @@index([customerId])
+  @@index([merchantId])
+  @@index([qrToken])
+  @@index([pinCode])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CustomerItemCount {
+  id         String   @id @default(uuid())
+  customerId String
+  merchantId String
+  rewardId   String
+  itemName   String
+  count      Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  reward   Reward   @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, merchantId, rewardId, itemName])
+  @@index([customerId])
+  @@index([merchantId])
+  @@index([rewardId])
+}
+
+// ============================================================================
+// LEDGER MODEL
+// ============================================================================
+
+model LedgerEntry {
+  id            String           @id @default(uuid())
+  customerId    String
+  merchantId    String
+  type          LedgerEntryType
+  points        Int              // Positive for EARN, negative for REDEEM/REFUND
+  transactionId String?          // For EARN/REFUND entries
+  redemptionId  String?          @unique // For REDEEM entries
+  createdAt     DateTime         @default(now())
+
+  // Relations
+  customer  Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  merchant  Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  redemption Redemption? @relation(fields: [redemptionId], references: [id], onDelete: SetNull)
+
+  @@index([customerId])
+  @@index([merchantId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([customerId, merchantId, createdAt])
+}
+
+// ============================================================================
+// SYSTEM MODELS
+// ============================================================================
+
+model WebhookLog {
+  id            String        @id @default(uuid())
+  provider      POSProvider
+  eventType     String
+  payload       Json
+  signature     String?
+  status        WebhookStatus @default(PENDING)
+  errorMessage  String?
+  processedAt   DateTime?
+  createdAt     DateTime      @default(now())
+
+  @@index([provider])
+  @@index([status])
+  @@index([createdAt])
 }

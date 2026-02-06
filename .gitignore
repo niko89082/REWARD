@@ -12,3 +12,4 @@
 ./prisma/schema.prisma.bak.8
 ./prisma/schema.prisma.bak.9
 ./prisma/schema.prisma.bak.10
+/generated/prisma

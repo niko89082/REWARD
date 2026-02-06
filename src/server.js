@@ -8,6 +8,7 @@ import redeemRoutes from './routes/redeem.js';
 import merchantRoutes from './routes/merchant.js';
 import adminRoutes from './routes/admin.js';
 import squareRoutes from './routes/square.js';
+import squareWebhookRoutes from './routes/squareWebhooks.js';
 import merchantStatusRoutes from './routes/merchantStatus.js';
 
 /**
@@ -43,6 +44,7 @@ export async function buildServer({ squareClient } = {}) {
   fastify.register(merchantRoutes);
   fastify.register(adminRoutes);
   fastify.register(squareRoutes);
+  fastify.register(squareWebhookRoutes);
   fastify.register(merchantStatusRoutes);
 
   return fastify;
