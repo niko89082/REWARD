@@ -7,8 +7,6 @@ import { env } from '../../../config/env';
 import type {
   SquareOAuthResponse,
   SquareWebhookEvent,
-  SquareLocation,
-  SquareTransaction,
 } from './types';
 
 /**
@@ -85,19 +83,24 @@ export class SquareProvider implements IPOSProvider {
         throw new Error(`Square OAuth error: ${JSON.stringify(error)}`);
       }
 
-      const data: SquareOAuthResponse = await response.json();
+      const data = (await response.json()) as SquareOAuthResponse;
 
       logger.info({ merchantId: data.merchant_id }, 'Successfully exchanged Square auth code');
 
-      return {
+      const credentials: OAuthCredentials = {
         accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        expiresIn: data.expires_at ? this.parseExpiresAt(data.expires_at) : undefined,
         merchantId: data.merchant_id,
         metadata: {
           tokenType: data.token_type,
         },
       };
+      if (data.refresh_token !== undefined) {
+        credentials.refreshToken = data.refresh_token;
+      }
+      if (data.expires_at !== undefined) {
+        credentials.expiresIn = this.parseExpiresAt(data.expires_at);
+      }
+      return credentials;
     } catch (error) {
       logger.error({ error, provider: 'Square' }, 'Failed to exchange Square auth code');
       throw error;
@@ -130,19 +133,24 @@ export class SquareProvider implements IPOSProvider {
         throw new Error(`Square token refresh error: ${JSON.stringify(error)}`);
       }
 
-      const data: SquareOAuthResponse = await response.json();
+      const data = (await response.json()) as SquareOAuthResponse;
 
       logger.info({ merchantId: data.merchant_id }, 'Successfully refreshed Square token');
 
-      return {
+      const credentials: OAuthCredentials = {
         accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        expiresIn: data.expires_at ? this.parseExpiresAt(data.expires_at) : undefined,
         merchantId: data.merchant_id,
         metadata: {
           tokenType: data.token_type,
         },
       };
+      if (data.refresh_token !== undefined) {
+        credentials.refreshToken = data.refresh_token;
+      }
+      if (data.expires_at !== undefined) {
+        credentials.expiresIn = this.parseExpiresAt(data.expires_at);
+      }
+      return credentials;
     } catch (error) {
       logger.error({ error, provider: 'Square' }, 'Failed to refresh Square token');
       throw error;
@@ -195,29 +203,32 @@ export class SquareProvider implements IPOSProvider {
       logger.info({ provider: 'Square' }, 'Fetching Square locations');
 
       const client = new SquareClient({
-        accessToken,
+        token: accessToken,
         environment: this.environment,
       });
 
-      const response = await client.locationsApi.listLocations();
+      const response = await client.locations.list();
 
-      if (response.result.errors && response.result.errors.length > 0) {
-        throw new Error(`Square API error: ${JSON.stringify(response.result.errors)}`);
+      if (response.errors && response.errors.length > 0) {
+        throw new Error(`Square API error: ${JSON.stringify(response.errors)}`);
       }
 
-      const locations: GenericLocation[] = (response.result.locations || []).map(
-        (loc: SquareLocation) => ({
-          id: loc.id,
-          name: loc.name,
-          address: loc.address?.address_line_1,
-          city: loc.address?.locality,
-          state: loc.address?.administrative_district_level_1,
-          zipCode: loc.address?.postal_code,
-          country: loc.address?.country,
-          metadata: {
-            squareLocation: loc,
-          },
-        })
+      const locations: GenericLocation[] = (response.locations || []).map(
+        (loc) => {
+          const result: GenericLocation = {
+            id: loc.id ?? '',
+            name: loc.name ?? '',
+            metadata: {
+              squareLocation: loc,
+            },
+          };
+          if (loc.address?.addressLine1 != null) result.address = loc.address.addressLine1;
+          if (loc.address?.locality != null) result.city = loc.address.locality;
+          if (loc.address?.administrativeDistrictLevel1 != null) result.state = loc.address.administrativeDistrictLevel1;
+          if (loc.address?.postalCode != null) result.zipCode = loc.address.postalCode;
+          if (loc.address?.country != null) result.country = loc.address.country;
+          return result;
+        }
       );
 
       logger.info({ count: locations.length, provider: 'Square' }, 'Fetched Square locations');
@@ -245,49 +256,52 @@ export class SquareProvider implements IPOSProvider {
       );
 
       const client = new SquareClient({
-        accessToken,
+        token: accessToken,
         environment: this.environment,
       });
 
-      const query: any = {};
-      if (locationId) {
-        query.location_ids = [locationId];
-      }
+      const listRequest: {
+        beginTime?: string;
+        endTime?: string;
+        locationId?: string;
+      } = {};
       if (startDate) {
-        query.begin_time = startDate.toISOString();
+        listRequest.beginTime = startDate.toISOString();
       }
       if (endDate) {
-        query.end_time = endDate.toISOString();
+        listRequest.endTime = endDate.toISOString();
+      }
+      if (locationId) {
+        listRequest.locationId = locationId;
       }
 
-      const response = await client.paymentsApi.listPayments(query);
+      const page = await client.payments.list(listRequest);
 
-      if (response.result.errors && response.result.errors.length > 0) {
-        throw new Error(`Square API error: ${JSON.stringify(response.result.errors)}`);
+      if (page.response?.errors && page.response.errors.length > 0) {
+        throw new Error(`Square API error: ${JSON.stringify(page.response.errors)}`);
       }
 
       // Square payments don't include line items directly, so we need to fetch orders
       // For now, we'll create transactions from payments
-      const transactions: GenericTransaction[] = (response.result.payments || []).map(
-        (payment: any) => {
-          const amount = payment.amountMoney?.amount || 0;
-          const currency = payment.amountMoney?.currency || 'USD';
+      const transactions: GenericTransaction[] = (page.data || []).map((payment) => {
+        const amount = payment.amountMoney?.amount ?? 0;
+        const currency = payment.amountMoney?.currency ?? 'USD';
 
-          return {
-            id: payment.id,
-            locationId: payment.locationId,
-            amount: amount / 100, // Square amounts are in cents
-            currency,
-            lineItems: [], // Will be populated from orders if needed
-            customerId: payment.customerId,
-            paymentMethod: payment.sourceType,
-            metadata: {
-              squarePayment: payment,
-            },
-            createdAt: new Date(payment.createdAt),
-          };
-        }
-      );
+        const result: GenericTransaction = {
+          id: payment.id ?? '',
+          amount: Number(amount) / 100, // Square amounts are in cents
+          currency: typeof currency === 'string' ? currency : 'USD',
+          lineItems: [], // Will be populated from orders if needed
+          metadata: {
+            squarePayment: payment,
+          },
+          createdAt: new Date(payment.createdAt ?? Date.now()),
+        };
+        if (payment.locationId != null) result.locationId = payment.locationId;
+        if (payment.customerId != null) result.customerId = payment.customerId;
+        if (payment.sourceType != null) result.paymentMethod = payment.sourceType;
+        return result;
+      });
 
       logger.info(
         { count: transactions.length, provider: 'Square' },
@@ -317,25 +331,27 @@ export class SquareProvider implements IPOSProvider {
       logger.info({ provider: 'Square', itemData }, 'Creating Square catalog item');
 
       const client = new SquareClient({
-        accessToken,
+        token: accessToken,
         environment: this.environment,
       });
 
       const catalogObject = {
         type: 'ITEM' as const,
+        id: '#temp',
         itemData: {
           name: itemData.name,
-          description: itemData.description,
+          description: itemData.description ?? null,
           variations: itemData.price
             ? [
                 {
                   type: 'ITEM_VARIATION' as const,
+                  id: '#tempvar',
                   itemVariationData: {
                     name: 'Default',
                     pricingType: 'FIXED_PRICING' as const,
                     priceMoney: {
-                      amount: Math.round(itemData.price * 100), // Convert to cents
-                      currency: 'USD',
+                      amount: BigInt(Math.round(itemData.price * 100)), // Convert to cents
+                      currency: 'USD' as const,
                     },
                   },
                 },
@@ -344,16 +360,16 @@ export class SquareProvider implements IPOSProvider {
         },
       };
 
-      const response = await client.catalogApi.upsertCatalogObject({
+      const response = await client.catalog.object.upsert({
         idempotencyKey: crypto.randomUUID(),
         object: catalogObject,
       });
 
-      if (response.result.errors && response.result.errors.length > 0) {
-        throw new Error(`Square API error: ${JSON.stringify(response.result.errors)}`);
+      if (response.errors && response.errors.length > 0) {
+        throw new Error(`Square API error: ${JSON.stringify(response.errors)}`);
       }
 
-      const catalogObj = response.result.catalogObject;
+      const catalogObj = response.catalogObject;
       if (!catalogObj) {
         throw new Error('No catalog object returned from Square');
       }
@@ -364,7 +380,7 @@ export class SquareProvider implements IPOSProvider {
       );
 
       return {
-        id: catalogObj.id,
+        id: catalogObj?.id ?? '',
         metadata: {
           squareCatalogObject: catalogObj,
         },
@@ -392,39 +408,44 @@ export class SquareProvider implements IPOSProvider {
       logger.info({ provider: 'Square', itemId, itemData }, 'Updating Square catalog item');
 
       const client = new SquareClient({
-        accessToken,
+        token: accessToken,
         environment: this.environment,
       });
 
       // First, retrieve the current object
-      const getResponse = await client.catalogApi.retrieveCatalogObject(itemId, true);
-      
-      if (getResponse.result.errors && getResponse.result.errors.length > 0) {
-        throw new Error(`Square API error: ${JSON.stringify(getResponse.result.errors)}`);
+      const getResponse = await client.catalog.object.get({
+        objectId: itemId,
+        includeRelatedObjects: true,
+      });
+
+      if (getResponse.errors && getResponse.errors.length > 0) {
+        throw new Error(`Square API error: ${JSON.stringify(getResponse.errors)}`);
       }
 
-      const currentObj = getResponse.result.object;
-      if (!currentObj || !currentObj.itemData) {
+      const currentObj = getResponse.object;
+      if (!currentObj || !('itemData' in currentObj) || !currentObj.itemData) {
         throw new Error('Catalog object not found or not an item');
       }
+
+      const itemObj = currentObj as typeof currentObj & { itemData: NonNullable<typeof currentObj.itemData> };
 
       // Update the object
       const updatedObj = {
         ...currentObj,
         itemData: {
-          ...currentObj.itemData,
-          name: itemData.name ?? currentObj.itemData.name,
-          description: itemData.description ?? currentObj.itemData.description,
+          ...itemObj.itemData,
+          name: itemData.name ?? itemObj.itemData.name ?? null,
+          description: itemData.description ?? itemObj.itemData.description ?? null,
         },
       };
 
-      const response = await client.catalogApi.upsertCatalogObject({
+      const response = await client.catalog.object.upsert({
         idempotencyKey: crypto.randomUUID(),
         object: updatedObj,
       });
 
-      if (response.result.errors && response.result.errors.length > 0) {
-        throw new Error(`Square API error: ${JSON.stringify(response.result.errors)}`);
+      if (response.errors && response.errors.length > 0) {
+        throw new Error(`Square API error: ${JSON.stringify(response.errors)}`);
       }
 
       logger.info({ itemId, provider: 'Square' }, 'Updated Square catalog item');
@@ -442,14 +463,16 @@ export class SquareProvider implements IPOSProvider {
       logger.info({ provider: 'Square', itemId }, 'Deleting Square catalog item');
 
       const client = new SquareClient({
-        accessToken,
+        token: accessToken,
         environment: this.environment,
       });
 
-      const response = await client.catalogApi.deleteCatalogObject(itemId);
+      const response = await client.catalog.object.delete({
+        objectId: itemId,
+      });
 
-      if (response.result.errors && response.result.errors.length > 0) {
-        throw new Error(`Square API error: ${JSON.stringify(response.result.errors)}`);
+      if (response.errors && response.errors.length > 0) {
+        throw new Error(`Square API error: ${JSON.stringify(response.errors)}`);
       }
 
       logger.info({ itemId, provider: 'Square' }, 'Deleted Square catalog item');

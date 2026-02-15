@@ -3,8 +3,11 @@ import { Queue, Worker, QueueEvents } from 'bullmq';
 import { logger } from './logger';
 import { env } from '../config/env';
 
+/**
+ * Redis connection for BullMQ
+ */
 export const redis = new Redis(env.REDIS_URL, {
-  maxRetriesPerRequest: null,
+  maxRetriesPerRequest: null, // Required for BullMQ
   enableReadyCheck: false,
 });
 
@@ -16,43 +19,41 @@ redis.on('error', (error) => {
   logger.error({ error }, 'Redis connection error');
 });
 
+/**
+ * Connection options for BullMQ
+ */
+export const bullMQConnection = {
+  host: new URL(env.REDIS_URL).hostname,
+  port: parseInt(new URL(env.REDIS_URL).port || '6379'),
+  maxRetriesPerRequest: null,
+};
+
+/**
+ * Create a BullMQ queue
+ */
 export function createQueue<T = any>(name: string): Queue<T> {
   return new Queue<T>(name, {
-    connection: redis,
+    connection: bullMQConnection,
   });
 }
 
+/**
+ * Create a BullMQ worker
+ */
 export function createWorker<T = any>(
   name: string,
   processor: (job: any) => Promise<void>
 ): Worker<T> {
-  const worker = new Worker<T>(name, processor, {
-    connection: redis.duplicate(),
+  return new Worker<T>(name, processor, {
+    connection: bullMQConnection,
   });
-  
-  worker.on('ready', () => {
-    logger.info({ queue: name }, 'Worker ready');
-  });
-  
-  worker.on('active', (job) => {
-    logger.info({ queue: name, jobId: job.id }, 'Job active');
-  });
-  
-  worker.on('completed', (job) => {
-    logger.info({ queue: name, jobId: job.id }, 'Job completed');
-  });
-  
-  worker.on('failed', (job, err) => {
-    logger.error({ queue: name, jobId: job?.id, error: err }, 'Job failed');
-  });
-  
-  return worker;
 }
 
+/**
+ * Create queue events listener
+ */
 export function createQueueEvents(name: string): QueueEvents {
   return new QueueEvents(name, {
-    connection: redis.duplicate(),
+    connection: bullMQConnection,
   });
 }
-
-export const webhookQueue = createQueue('webhook-processing');

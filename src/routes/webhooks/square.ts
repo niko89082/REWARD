@@ -7,9 +7,7 @@ import { getPOSProvider } from '../../pos/factory';
 import { env } from '../../config/env';
 import { createQueue } from '../../lib/redis';
 
-import { webhookQueue } from '../../lib/redis';
-
-
+const webhookQueue = createQueue('webhook-processing');
 
 /**
  * Square webhook endpoint
@@ -18,10 +16,10 @@ export default async function squareWebhookRoutes(fastify: FastifyInstance) {
   fastify.post('/webhooks/square', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const rawBody = JSON.stringify(request.body);
-      const signature = (request.headers['x-square-hmacsha256-signature'] as string) || 
-                        (request.headers['x-square-signature'] as string) || '';
+      const signature = (request.headers['x-square-signature'] as string) ||
+        (request.headers['x-square-hmacsha256-signature'] as string) || '';
 
-      // Skip signature verification in development
+      // Skip signature verification in development for local testing
       if (env.NODE_ENV === 'production' && signature) {
         const provider = getPOSProvider(POSProvider.SQUARE);
         const isValid = provider.verifyWebhookSignature(
@@ -36,7 +34,7 @@ export default async function squareWebhookRoutes(fastify: FastifyInstance) {
           return;
         }
       } else if (env.NODE_ENV === 'development') {
-        logger.info('Skipping signature verification in development');
+        logger.info('Skipping webhook signature verification in development');
       }
 
       const payload = request.body as any;
@@ -53,7 +51,7 @@ export default async function squareWebhookRoutes(fastify: FastifyInstance) {
       });
 
       // Queue for async processing
-      await webhookQueue.add('process-webhook', {
+      await webhookQueue.add('process-square-webhook', {
         webhookLogId: webhookLog.id,
         payload,
       });

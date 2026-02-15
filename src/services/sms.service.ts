@@ -4,15 +4,10 @@ import { env } from '../config/env';
 import { logger } from '../lib/logger';
 
 // Only create Twilio client if credentials look real
-// Real Twilio Account SIDs start with 'AC' and are 34 characters long
-const isRealTwilioCredentials = 
-  env.TWILIO_ACCOUNT_SID.startsWith('AC') && 
-  env.TWILIO_ACCOUNT_SID.length >= 34 &&
-  env.TWILIO_AUTH_TOKEN.length >= 32;
-
-const twilioClient = isRealTwilioCredentials
-  ? twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN)
-  : null;
+const twilioClient =
+  env.TWILIO_ACCOUNT_SID.startsWith('AC') && env.TWILIO_ACCOUNT_SID.length > 20
+    ? twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN)
+    : null;
 
 /**
  * Send SMS verification code to phone number
@@ -20,20 +15,25 @@ const twilioClient = isRealTwilioCredentials
  */
 export async function sendVerificationCode(phoneNumber: string): Promise<void> {
   try {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    
+    // In test environment, use fixed code for predictable testing
+    const code =
+      env.NODE_ENV === 'test'
+        ? '123456'
+        : Math.floor(100000 + Math.random() * 900000).toString();
+
     // Store in Redis with 10-minute expiration
     await redis.setex(`sms:${phoneNumber}`, 600, code);
-    
-    // Skip actual SMS in development or with fake credentials
-    if (env.NODE_ENV === 'development' || !twilioClient) {
+
+    // Skip actual SMS in development, test, or with fake credentials
+    if (env.NODE_ENV === 'development' || env.NODE_ENV === 'test' || !twilioClient) {
       logger.info({ phoneNumber, code }, 'SMS code (dev mode - not sent)');
-      // Print to console for easy testing
-      console.log(`\n📱 SMS Code for ${phoneNumber}: ${code}\n`);
+      if (env.NODE_ENV !== 'test') {
+        console.log(`\n📱 SMS Code for ${phoneNumber}: ${code}\n`);
+      }
       return;
     }
-    
-    // Send real SMS in production with real credentials
+
+    // Send real SMS in production
     await twilioClient.messages.create({
       body: `Your verification code is: ${code}`,
       from: env.TWILIO_PHONE_NUMBER,

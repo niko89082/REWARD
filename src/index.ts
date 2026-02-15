@@ -111,7 +111,9 @@ async function start() {
   }
 }
 
-// Start server if this file is executed directly
-start();
+// Start server only when run directly (not when imported for tests)
+if (!process.env.VITEST) {
+  start();
+}
 
 export { buildServer };
