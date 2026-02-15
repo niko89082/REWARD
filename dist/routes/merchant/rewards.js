@@ -27,7 +27,14 @@ export default async function merchantRewardsRoutes(fastify) {
         try {
             const merchantId = request.merchantId;
             const data = createRewardSchema.parse(request.body);
-            const reward = await createReward(merchantId, data);
+            const reward = await createReward(merchantId, {
+                name: data.name,
+                type: data.type,
+                ...(data.description !== undefined && { description: data.description }),
+                ...(data.pointsCost !== undefined && { pointsCost: data.pointsCost }),
+                ...(data.itemName !== undefined && { itemName: data.itemName }),
+                ...(data.itemCount !== undefined && { itemCount: data.itemCount }),
+            });
             reply.code(201).send({ reward });
         }
         catch (error) {
@@ -54,7 +61,14 @@ export default async function merchantRewardsRoutes(fastify) {
             const merchantId = request.merchantId;
             const { id } = request.params;
             const data = updateRewardSchema.parse(request.body);
-            const reward = await updateReward(id, merchantId, data);
+            const reward = await updateReward(id, merchantId, {
+                ...(data.name !== undefined && { name: data.name }),
+                ...(data.description !== undefined && { description: data.description }),
+                ...(data.pointsCost !== undefined && { pointsCost: data.pointsCost }),
+                ...(data.itemName !== undefined && { itemName: data.itemName }),
+                ...(data.itemCount !== undefined && { itemCount: data.itemCount }),
+                ...(data.isActive !== undefined && { isActive: data.isActive }),
+            });
             reply.send({ reward });
         }
         catch (error) {

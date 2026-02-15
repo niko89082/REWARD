@@ -34,7 +34,7 @@ export declare function initiateRedemption(customerId: string, merchantId: strin
 export declare function verifyRedemption(code: string, merchantId: string): Promise<{
     valid: boolean;
     error: string;
-    redemption?: never;
+    redemption?: undefined;
 } | {
     valid: boolean;
     redemption: {
@@ -45,14 +45,14 @@ export declare function verifyRedemption(code: string, merchantId: string): Prom
         };
         reward: {
             type: import(".prisma/client").$Enums.RewardType;
-            name: string;
             id: string;
+            name: string;
             description: string | null;
             pointsCost: number | null;
         };
         pointsCost: number | null;
     };
-    error?: never;
+    error?: undefined;
 }>;
 /**
  * Complete redemption - deduct points and mark as redeemed

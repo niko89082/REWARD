@@ -216,19 +216,19 @@ export async function syncLocations(merchantId, posIntegrationId) {
                         posIntegrationId,
                         posLocationId: location.id,
                         name: location.name,
-                        address: location.address,
-                        city: location.city,
-                        state: location.state,
-                        zipCode: location.zipCode,
-                        country: location.country,
+                        address: location.address ?? null,
+                        city: location.city ?? null,
+                        state: location.state ?? null,
+                        zipCode: location.zipCode ?? null,
+                        country: location.country ?? null,
                     },
                     update: {
                         name: location.name,
-                        address: location.address,
-                        city: location.city,
-                        state: location.state,
-                        zipCode: location.zipCode,
-                        country: location.country,
+                        address: location.address ?? null,
+                        city: location.city ?? null,
+                        state: location.state ?? null,
+                        zipCode: location.zipCode ?? null,
+                        country: location.country ?? null,
                     },
                 });
             }
@@ -251,11 +251,11 @@ export async function createReward(merchantId, rewardData) {
             data: {
                 merchantId,
                 name: rewardData.name,
-                description: rewardData.description,
+                description: rewardData.description ?? null,
                 type: rewardData.type,
-                pointsCost: rewardData.pointsCost,
-                itemName: rewardData.itemName,
-                itemCount: rewardData.itemCount,
+                pointsCost: rewardData.pointsCost ?? null,
+                itemName: rewardData.itemName ?? null,
+                itemCount: rewardData.itemCount ?? null,
             },
             include: {
                 merchant: {
@@ -376,8 +376,8 @@ export async function syncRewardToPOS(rewardId, merchantId) {
         }
         const result = await provider.createRewardItem(decryptedAccessToken, {
             name: reward.name,
-            description: reward.description || undefined,
-            price: reward.pointsCost ? reward.pointsCost / 100 : undefined, // Convert points to dollars (example)
+            ...(reward.description && { description: reward.description }),
+            ...(reward.pointsCost && { price: reward.pointsCost / 100 }),
             metadata: {
                 rewardId: reward.id,
                 type: reward.type,

@@ -39,13 +39,15 @@ export function decrypt(ciphertext) {
     if (parts.length !== 3) {
         throw new Error('Invalid encrypted data format');
     }
-    const iv = Buffer.from(parts[0], 'base64');
-    const authTag = Buffer.from(parts[1], 'base64');
-    const encrypted = parts[2];
+    const [ivB64, authTagB64, encrypted] = parts;
+    if (!ivB64 || !authTagB64 || !encrypted) {
+        throw new Error('Invalid encrypted data format');
+    }
+    const iv = Buffer.from(ivB64, 'base64');
+    const authTag = Buffer.from(authTagB64, 'base64');
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
     decipher.setAuthTag(authTag);
-    let decrypted = decipher.update(encrypted, 'base64', 'utf8');
-    decrypted += decipher.final('utf8');
+    const decrypted = decipher.update(encrypted, 'base64', 'utf8') + decipher.final('utf8');
     return decrypted;
 }
 //# sourceMappingURL=crypto.js.map

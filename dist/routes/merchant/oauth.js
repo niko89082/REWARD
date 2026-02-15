@@ -38,6 +38,10 @@ export default async function merchantOAuthRoutes(fastify) {
             let merchantId;
             if (state) {
                 const [id] = state.split(':');
+                if (!id) {
+                    reply.code(400).send({ error: 'Invalid state parameter' });
+                    return;
+                }
                 merchantId = id;
             }
             else {

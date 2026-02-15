@@ -8,9 +8,9 @@ export declare function createMerchant(data: {
     password: string;
     name: string;
 }): Promise<{
-    name: string;
     id: string;
     createdAt: Date;
+    name: string;
     email: string;
 }>;
 /**
@@ -30,10 +30,10 @@ export declare function verifyMerchantPassword(email: string, password: string):
  * @param merchantId - Merchant ID
  */
 export declare function getMerchantById(merchantId: string): Promise<{
-    name: string;
     id: string;
     createdAt: Date;
     updatedAt: Date;
+    name: string;
     email: string;
 } | null>;
 /**
@@ -92,12 +92,17 @@ export declare function createReward(merchantId: string, rewardData: {
     itemName?: string;
     itemCount?: number;
 }): Promise<{
+    merchant: {
+        id: string;
+        name: string;
+    };
+} & {
     type: import(".prisma/client").$Enums.RewardType;
-    name: string;
     merchantId: string;
     id: string;
     createdAt: Date;
     updatedAt: Date;
+    name: string;
     description: string | null;
     pointsCost: number | null;
     itemName: string | null;
@@ -117,11 +122,11 @@ export declare function getMerchantRewards(merchantId: string, includeInactive?:
     }[];
 } & {
     type: import(".prisma/client").$Enums.RewardType;
-    name: string;
     merchantId: string;
     id: string;
     createdAt: Date;
     updatedAt: Date;
+    name: string;
     description: string | null;
     pointsCost: number | null;
     itemName: string | null;
@@ -143,11 +148,11 @@ export declare function updateReward(rewardId: string, merchantId: string, rewar
     isActive?: boolean;
 }): Promise<{
     type: import(".prisma/client").$Enums.RewardType;
-    name: string;
     merchantId: string;
     id: string;
     createdAt: Date;
     updatedAt: Date;
+    name: string;
     description: string | null;
     pointsCost: number | null;
     itemName: string | null;
