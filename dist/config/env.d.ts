@@ -1,0 +1,60 @@
+import 'dotenv/config';
+import { z } from 'zod';
+declare const envSchema: z.ZodObject<{
+    DATABASE_URL: z.ZodString;
+    REDIS_URL: z.ZodString;
+    PORT: z.ZodDefault<z.ZodNumber>;
+    NODE_ENV: z.ZodDefault<z.ZodEnum<["development", "production", "test"]>>;
+    JWT_SECRET: z.ZodString;
+    SQUARE_APPLICATION_ID: z.ZodString;
+    SQUARE_ACCESS_TOKEN: z.ZodString;
+    SQUARE_ENVIRONMENT: z.ZodEnum<["sandbox", "production"]>;
+    SQUARE_WEBHOOK_SIGNATURE_KEY: z.ZodString;
+    TWILIO_ACCOUNT_SID: z.ZodString;
+    TWILIO_AUTH_TOKEN: z.ZodString;
+    TWILIO_PHONE_NUMBER: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    DATABASE_URL: string;
+    REDIS_URL: string;
+    PORT: number;
+    NODE_ENV: "development" | "production" | "test";
+    JWT_SECRET: string;
+    SQUARE_APPLICATION_ID: string;
+    SQUARE_ACCESS_TOKEN: string;
+    SQUARE_ENVIRONMENT: "production" | "sandbox";
+    SQUARE_WEBHOOK_SIGNATURE_KEY: string;
+    TWILIO_ACCOUNT_SID: string;
+    TWILIO_AUTH_TOKEN: string;
+    TWILIO_PHONE_NUMBER: string;
+}, {
+    DATABASE_URL: string;
+    REDIS_URL: string;
+    JWT_SECRET: string;
+    SQUARE_APPLICATION_ID: string;
+    SQUARE_ACCESS_TOKEN: string;
+    SQUARE_ENVIRONMENT: "production" | "sandbox";
+    SQUARE_WEBHOOK_SIGNATURE_KEY: string;
+    TWILIO_ACCOUNT_SID: string;
+    TWILIO_AUTH_TOKEN: string;
+    TWILIO_PHONE_NUMBER: string;
+    PORT?: number | undefined;
+    NODE_ENV?: "development" | "production" | "test" | undefined;
+}>;
+export type Env = z.infer<typeof envSchema>;
+export declare function validatePhoneNumber(phone: string): boolean;
+export declare const env: {
+    DATABASE_URL: string;
+    REDIS_URL: string;
+    PORT: number;
+    NODE_ENV: "development" | "production" | "test";
+    JWT_SECRET: string;
+    SQUARE_APPLICATION_ID: string;
+    SQUARE_ACCESS_TOKEN: string;
+    SQUARE_ENVIRONMENT: "production" | "sandbox";
+    SQUARE_WEBHOOK_SIGNATURE_KEY: string;
+    TWILIO_ACCOUNT_SID: string;
+    TWILIO_AUTH_TOKEN: string;
+    TWILIO_PHONE_NUMBER: string;
+};
+export {};
+//# sourceMappingURL=env.d.ts.map

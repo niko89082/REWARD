@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "prisma generate && tsc",
-    "start": "prisma migrate deploy && node dist/index.js",
+    "build": "prisma generate",
+    "start": "prisma migrate deploy && tsx src/index.ts",
     "migrate": "prisma migrate dev",
     "generate": "prisma generate",
     "studio": "prisma studio",

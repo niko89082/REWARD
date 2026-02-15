@@ -1,0 +1,79 @@
+import { z } from 'zod';
+import { RewardType } from '@prisma/client';
+import { createReward, getMerchantRewards, updateReward, syncRewardToPOS, } from '../../services/merchant.service';
+import { logger } from '../../lib/logger';
+const createRewardSchema = z.object({
+    name: z.string().min(1),
+    description: z.string().optional(),
+    type: z.nativeEnum(RewardType),
+    pointsCost: z.number().int().positive().optional(),
+    itemName: z.string().optional(),
+    itemCount: z.number().int().positive().optional(),
+});
+const updateRewardSchema = z.object({
+    name: z.string().min(1).optional(),
+    description: z.string().optional(),
+    pointsCost: z.number().int().positive().optional(),
+    itemName: z.string().optional(),
+    itemCount: z.number().int().positive().optional(),
+    isActive: z.boolean().optional(),
+});
+/**
+ * Merchant rewards routes
+ */
+export default async function merchantRewardsRoutes(fastify) {
+    // Create reward
+    fastify.post('/api/merchant/rewards', { preHandler: [fastify.authenticateMerchant] }, async (request, reply) => {
+        try {
+            const merchantId = request.merchantId;
+            const data = createRewardSchema.parse(request.body);
+            const reward = await createReward(merchantId, data);
+            reply.code(201).send({ reward });
+        }
+        catch (error) {
+            logger.error({ error }, 'Create reward error');
+            throw error;
+        }
+    });
+    // List rewards
+    fastify.get('/api/merchant/rewards', { preHandler: [fastify.authenticateMerchant] }, async (request, reply) => {
+        try {
+            const merchantId = request.merchantId;
+            const includeInactive = request.query.includeInactive === 'true';
+            const rewards = await getMerchantRewards(merchantId, includeInactive);
+            reply.send({ rewards });
+        }
+        catch (error) {
+            logger.error({ error }, 'List rewards error');
+            throw error;
+        }
+    });
+    // Update reward
+    fastify.put('/api/merchant/rewards/:id', { preHandler: [fastify.authenticateMerchant] }, async (request, reply) => {
+        try {
+            const merchantId = request.merchantId;
+            const { id } = request.params;
+            const data = updateRewardSchema.parse(request.body);
+            const reward = await updateReward(id, merchantId, data);
+            reply.send({ reward });
+        }
+        catch (error) {
+            logger.error({ error }, 'Update reward error');
+            throw error;
+        }
+    });
+    // Sync reward to POS
+    fastify.post('/api/merchant/rewards/:id/sync', { preHandler: [fastify.authenticateMerchant] }, async (request, reply) => {
+        try {
+            const merchantId = request.merchantId;
+            const { id } = request.params;
+            await syncRewardToPOS(id, merchantId);
+            reply.send({ success: true });
+        }
+        catch (error) {
+            logger.error({ error }, 'Sync reward error');
+            throw error;
+        }
+    });
+}
+//# sourceMappingURL=rewards.js.map
